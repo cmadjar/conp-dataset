@@ -20,26 +20,25 @@ def parse_input(argv):
 
     script_options = {}
 
-    description = f"\nThis script can be used to remove from git-annex a series of URLs matching" \
-                  f" a specific pattern.\n" \
-                  f"\t- To run the script and print out the URLs that will be removed, use options" \
-                  f" -d <dataset path> -u <invalid URL regex>.\n" \
-                  f"\t- After examination of the result of the script, rerun the script with the same" \
-                  f" option and add the -c argument for actual removal of the URLs.\n" \
-                  f"\t- Option -v prints out progress of the script in the terminal.\n"
+    description = "\nThis script can be used to remove from git-annex a series of URLs matching" \
+                  " a specific pattern.\n" \
+                  "\t- To run the script and print out the URLs that will be removed, use options" \
+                  " -d <dataset path> -u <invalid URL regex>.\n" \
+                  "\t- After examination of the result of the script, rerun the script with the same" \
+                  " option and add the -c argument for actual removal of the URLs.\n" \
+                  "\t- Option -v prints out progress of the script in the terminal.\n"
 
     usage = (
-        f"\nusage  : python {__file__} -d <DataLad dataset directory path> -u <invalid URL regex>\n"
-        f"\noptions: \n"
-            f"\t-d: path to the DataLad dataset to work on\n"
-            f"\t-u: regular expression for invalid URLs to remove from git-annex\n"
-            f"\t-c: confirm that the removal of the URLs should be performed. "
-                    f"By default it will just print out what needs to be removed for validation\n"
-            f"\t-v: verbose\n"
+        "\nusage  : python " + __file__ + " -d <DataLad dataset directory path> -u <invalid URL regex>\n"
+        "\noptions: \n"
+            "\t-d: path to the DataLad dataset to work on\n"
+            "\t-c: confirm that the removal of the URLs should be performed. "
+                   "By default it will just print out what needs to be removed for validation\n"
+            "\t-v: verbose\n"
     )
 
     try:
-        opts, args = getopt.getopt(argv, "hcd:u:")
+        opts, args = getopt.getopt(argv, "hcd:")
     except getopt.GetoptError:
         sys.exit()
 
@@ -56,8 +55,6 @@ def parse_input(argv):
             sys.exit()
         elif opt == '-d':
             script_options['dataset_path'] = arg
-        elif opt == '-u':
-            script_options['invalid_url_regex'] = arg
         elif opt == '-c':
             script_options['run_removal'] = True
         elif opt == '-v':
@@ -74,27 +71,18 @@ def parse_input(argv):
 
     if not os.path.exists(script_options['dataset_path']):
         print(
-            f"\n\t* ------------------------------------------------------------------------------ *"
-            f"\n\t* ERROR: {script_options['dataset_path']} does not appear to be a valid path   "
-            f"\n\t* ------------------------------------------------------------------------------ *"
+            "\n\t* ------------------------------------------------------------------------------ *"
+            "\n\t* ERROR: " + script_options['dataset_path'] + "does not appear to be a valid path "
+            "\n\t* ------------------------------------------------------------------------------ *"
         )
         print(description + usage)
         sys.exit()
 
     if not os.path.exists(os.path.join(script_options['dataset_path'], '.datalad')):
         print(
-            f"\n\t* ----------------------------------------------------------------------------------- *"
-            f"\n\t* ERROR: {script_options['dataset_path']} does not appear to be a DataLad dataset   "
-            f"\n\t* ----------------------------------------------------------------------------------- *"
-        )
-        print(description + usage)
-        sys.exit()
-
-    if 'invalid_url_regex' not in script_options.keys():
-        print(
-            '\n\t* --------------------------------------------------------------------------------------------------- *'
-            '\n\t* ERROR: a regex for invalid URLs to remove should be provided to the script by using the option `-u` *'            
-            '\n\t* --------------------------------------------------------------------------------------------------- *'
+            "\n\t* ----------------------------------------------------------------------------------- *"
+            "\n\t* ERROR: " + script_options['dataset_path'] + "does not appear to be a DataLad dataset "
+            "\n\t* ----------------------------------------------------------------------------------- *"
         )
         print(description + usage)
         sys.exit()
@@ -144,15 +132,13 @@ def get_files_and_urls(dataset_path, annex):
     return results
 
 
-def filter_invalid_urls(files_and_urls_dict, regex_pattern):
+def filter_invalid_urls(files_and_urls_dict):
     """
     Filters out the URLs that need to be removed based on a regular
     expression pattern.
 
     :param files_and_urls_dict: files' path and their respective URLs.
      :type files_and_urls_dict: dict
-    :param regex_pattern: regular expression pattern for URL filtering
-     :type regex_pattern: str
 
     :return: filtered URLs per file
      :rtype: dict
@@ -160,12 +146,13 @@ def filter_invalid_urls(files_and_urls_dict, regex_pattern):
 
     filtered_dict = {}
     for file_path in files_and_urls_dict.keys():
-        file_basename = os.path.basename(file_path)
-        filtered_urls_list = filter(
-            lambda x: not x.endswith(file_basename),
-            files_and_urls_dict[file_path]
-        )
-        filtered_dict[file_path] = filtered_urls_list
+        if file_path.endswith('scans.json') or file_path.endswith('bval'):
+            file_basename = os.path.basename(file_path)
+            filtered_urls_list = filter(
+                lambda x: not x.endswith(file_basename),
+                files_and_urls_dict[file_path]
+            )
+            filtered_dict[file_path] = filtered_urls_list
 
     return filtered_dict
 
@@ -188,14 +175,14 @@ def remove_invalid_urls(filtered_file_urls_dict, script_options, annex):
     try:
         os.chdir(dataset_path)
         for file_path in filtered_file_urls_dict.keys():
+            print("\n\nPROCESSING " + file_path)
             for url in filtered_file_urls_dict[file_path]:
                 if script_options['run_removal']:
-                    if script_options['verbose']:
-                        print(f"\n => Running `git annex rmurl {file_path} {url}`\n")
+                    print("\n => Running `git annex rmurl " + file_path + " " + url + "`\n")
                     annex('rmurl', file_path, url)
                 else:
                     print(
-                        f"\nWill be running `git annex rmurl {file_path} {url}`\n"
+                        "\nWill be running `git annex rmurl " + file_path + " " + url + "`\n"
                     )
     except Exception:
         traceback.print_exc()
@@ -212,14 +199,11 @@ if __name__ == "__main__":
 
     # fetch files and urls attached to the file
     if script_options['verbose']:
-        print(f"\n => Reading {script_options['dataset_path']} and grep annexed files with their URLs\n")
+        print("\n => Reading " + script_options['dataset_path'] + " and grep annexed files with their URLs\n")
     files_and_urls_dict = get_files_and_urls(script_options['dataset_path'], annex)
 
     # grep only the invalid URLs that need to be removed from the annexed files
-    regex_pattern = re.compile(script_options['invalid_url_regex'])
-    if script_options['verbose']:
-        print(f"\n => Grep the invalid URLs based on the regular expression {regex_pattern}")
-    filtered_file_urls_dict = filter_invalid_urls(files_and_urls_dict, regex_pattern)
+    filtered_file_urls_dict = filter_invalid_urls(files_and_urls_dict)
 
     # remove the invalid URLs found for each annexed file
     remove_invalid_urls(filtered_file_urls_dict, script_options, annex)
